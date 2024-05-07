@@ -65,9 +65,9 @@ export const useMenu = () => {
       key: 'setting',
       label: (
         <Flexbox align={'center'} gap={4} horizontal>
-          <Flexbox horizontal onClick={() => openSettings()}>
-            <NewVersionBadge showBadge={hasNewVersion}>{t('userPanel.setting')}</NewVersionBadge>
-          </Flexbox>
+          <NewVersionBadge onClick={() => openSettings()} showBadge={hasNewVersion}>
+            {t('userPanel.setting')}
+          </NewVersionBadge>
           <ActionIcon
             icon={Maximize}
             onClick={() => router.push(urlJoin('/settings', SettingsTabs.Common))}
