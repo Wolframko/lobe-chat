@@ -1,4 +1,3 @@
-import { LobePluginType } from '@lobehub/chat-plugin-sdk';
 import { t } from 'i18next';
 
 import { DEFAULT_INBOX_AVATAR, DEFAULT_USER_AVATAR } from '@/const/meta';
@@ -108,17 +107,6 @@ const chatsMessageString = (s: ChatStore): string => {
   return chats.map((m) => m.content).join('');
 };
 
-const getFunctionMessageProps =
-  ({ plugin, content, id }: Pick<ChatMessage, 'plugin' | 'content' | 'id'>) =>
-  (s: ChatStore) => ({
-    arguments: plugin?.arguments,
-    command: plugin,
-    content,
-    id: plugin?.identifier,
-    loading: id === s.chatLoadingId,
-    type: plugin?.type as LobePluginType,
-  });
-
 const getMessageById = (id: string) => (s: ChatStore) => chatHelpers.getMessageById(s.messages, id);
 const getTraceIdByMessageId = (id: string) => (s: ChatStore) => getMessageById(id)(s)?.traceId;
 
@@ -127,6 +115,9 @@ const latestMessage = (s: ChatStore) => currentChats(s).at(-1);
 const currentChatLoadingState = (s: ChatStore) => !s.messagesInit;
 
 const isMessageEditing = (id: string) => (s: ChatStore) => s.messageEditingIds.includes(id);
+const isMessageLoading = (id: string) => (s: ChatStore) => s.messageLoadingIds.includes(id);
+const isMessageGenerating = (id: string) => (s: ChatStore) => s.chatLoadingIds.includes(id);
+const isAIGenerating = (s: ChatStore) => s.chatLoadingIds.length > 0;
 
 export const chatSelectors = {
   chatsMessageString,
@@ -136,10 +127,12 @@ export const chatSelectors = {
   currentChats,
   currentChatsWithGuideMessage,
   currentChatsWithHistoryConfig,
-  getFunctionMessageProps,
   getMessageById,
   getTraceIdByMessageId,
+  isAIGenerating,
   isMessageEditing,
+  isMessageGenerating,
+  isMessageLoading,
   latestMessage,
   showInboxWelcome,
 };

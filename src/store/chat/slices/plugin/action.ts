@@ -30,7 +30,7 @@ export interface ChatPluginAction {
   invokeMarkdownTypePlugin: (id: string, payload: ChatToolPayload) => Promise<void>;
   invokeStandaloneTypePlugin: (id: string, payload: ChatToolPayload) => Promise<void>;
   runPluginApi: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
-  triggerAIMessage: (id: string, traceId?: string) => Promise<void>;
+  triggerAIMessage: (params: { parentId?: string; traceId?: string }) => Promise<void>;
   triggerToolCalls: (id: string) => Promise<void>;
 
   updatePluginState: (id: string, key: string, value: any) => Promise<void>;
@@ -60,7 +60,7 @@ export const chatPlugin: StateCreator<
 
     await internal_updateMessageContent(id, content);
 
-    if (triggerAiMessage) await triggerAIMessage(id);
+    if (triggerAiMessage) await triggerAIMessage({ parentId: id });
   },
 
   internal_transformToolCalls: (toolCalls) => {
@@ -165,10 +165,15 @@ export const chatPlugin: StateCreator<
     let data: string;
 
     try {
-      const abortController = internal_toggleChatLoading(true, id, n('fetchPlugin') as string);
+      const abortController = internal_toggleChatLoading(
+        true,
+        id,
+        n('fetchPlugin/start') as string,
+      );
 
       const message = chatSelectors.getMessageById(id)(get());
 
+      console.log('pluginMessage', message);
       const res = await chatService.runPluginApi(payload, {
         signal: abortController?.signal,
         trace: { observationId: message?.observationId, traceId: message?.traceId },
@@ -192,7 +197,7 @@ export const chatPlugin: StateCreator<
       data = '';
     }
 
-    internal_toggleChatLoading(false);
+    internal_toggleChatLoading(false, id, n('fetchPlugin/end') as string);
     // 如果报错则结束了
     if (!data) return;
 
@@ -201,10 +206,10 @@ export const chatPlugin: StateCreator<
     return data;
   },
 
-  triggerAIMessage: async (id, traceId) => {
+  triggerAIMessage: async ({ parentId, traceId }) => {
     const { internal_coreProcessMessage } = get();
     const chats = chatSelectors.currentChats(get());
-    await internal_coreProcessMessage(chats, id, { traceId });
+    await internal_coreProcessMessage(chats, parentId ?? chats.at(-1)!.id, { traceId });
   },
 
   triggerToolCalls: async (assistantId) => {
@@ -225,9 +230,10 @@ export const chatPlugin: StateCreator<
       const toolMessage: CreateMessageParams = {
         content: LOADING_FLAT,
         parentId: assistantId,
+        plugin: payload,
         role: 'tool',
         sessionId: get().activeId,
-        tool: payload,
+        tool_call_id: payload.id,
         topicId: get().activeTopicId, // if there is activeTopicId，then add it to topicId
       };
 
@@ -266,7 +272,7 @@ export const chatPlugin: StateCreator<
 
     const traceId = chatSelectors.getTraceIdByMessageId(latestToolId)(get());
 
-    await triggerAIMessage(latestToolId, traceId);
+    await triggerAIMessage({ traceId });
   },
 
   updatePluginState: async (id, key, value) => {

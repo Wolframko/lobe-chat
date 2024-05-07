@@ -56,17 +56,15 @@ const Item = memo<ChatListItemProps>(({ index, id }) => {
   }, isEqual);
 
   const historyLength = useChatStore((s) => chatSelectors.currentChats(s).length);
-  const [editing, toggleMessageEditing] = useChatStore((s) => [
-    chatSelectors.isMessageEditing(id)(s),
-    s.toggleMessageEditing,
-  ]);
 
-  const [loading, updateMessageContent] = useChatStore((s) => [
-    s.chatLoadingId === id || s.messageLoadingIds.includes(id),
-    s.modifyMessageContent,
-  ]);
-
-  const [isMessageLoading] = useChatStore((s) => [s.messageLoadingIds.includes(id)]);
+  const [isMessageLoading, generating, editing, toggleMessageEditing, updateMessageContent] =
+    useChatStore((s) => [
+      chatSelectors.isMessageLoading(id)(s),
+      chatSelectors.isMessageGenerating(id)(s),
+      chatSelectors.isMessageEditing(id)(s),
+      s.toggleMessageEditing,
+      s.modifyMessageContent,
+    ]);
 
   const onAvatarsClick = useAvatarsClick();
 
@@ -132,7 +130,7 @@ const Item = memo<ChatListItemProps>(({ index, id }) => {
           error={error}
           errorMessage={<ErrorMessageExtra data={item} />}
           fontSize={fontSize}
-          loading={loading}
+          loading={generating}
           message={item.content}
           messageExtra={<MessageExtra data={item} />}
           onAvatarClick={onAvatarsClick?.(item.role)}

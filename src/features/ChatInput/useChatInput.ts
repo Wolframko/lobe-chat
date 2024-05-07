@@ -18,7 +18,7 @@ export const useChatInput = () => {
   const canUpload = useUserStore(modelProviderSelectors.isModelEnabledUpload(model));
 
   const [loading, value, onInput, onStop] = useChatStore((s) => [
-    !!s.chatLoadingId,
+    s.chatLoadingIds.length > 0,
     s.inputMessage,
     s.updateInputMessage,
     s.stopGenerateMessage,

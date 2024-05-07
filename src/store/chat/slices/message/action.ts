@@ -16,7 +16,7 @@ import { traceService } from '@/services/trace';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { chatHelpers } from '@/store/chat/helpers';
-import { ChatStore } from '@/store/chat/store';
+import { ChatStore, useChatStore } from '@/store/chat/store';
 import { ChatMessage, MessageToolCall } from '@/types/message';
 import { TraceEventPayloads } from '@/types/trace';
 import { setNamespace } from '@/utils/storeDebug';
@@ -138,6 +138,18 @@ const preventLeavingFn = (e: BeforeUnloadEvent) => {
   e.returnValue = '你有正在生成中的请求，确定要离开吗？';
 };
 
+const toggleBooleanList = (ids: string[], id: string, loading: boolean) => {
+  return produce(ids, (draft) => {
+    if (loading) {
+      draft.push(id);
+    } else {
+      const index = draft.indexOf(id);
+
+      if (index >= 0) draft.splice(index, 1);
+    }
+  });
+};
+
 export const chatMessage: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
@@ -145,8 +157,31 @@ export const chatMessage: StateCreator<
   ChatMessageAction
 > = (set, get) => ({
   deleteMessage: async (id) => {
-    get().internal_dispatchMessage({ type: 'deleteMessage', id });
-    await messageService.removeMessage(id);
+    const message = chatSelectors.getMessageById(id)(get());
+    if (!message) return;
+
+    const deleteFn = async (id: string) => {
+      get().internal_dispatchMessage({ type: 'deleteMessage', id });
+      await messageService.removeMessage(id);
+    };
+
+    // if the message is a tool calls, then delete all the related messages
+    // TODO: maybe we need to delete it in the DB?
+    if (message.tool_calls) {
+      const pools = message.tool_calls
+        .flatMap((tool) => {
+          const messages = useChatStore
+            .getState()
+            .messages.filter((m) => m.tool_call_id === tool.id);
+
+          return messages.map((m) => m.id);
+        })
+        .map((i) => deleteFn(i));
+
+      await Promise.all(pools);
+    }
+
+    await deleteFn(id);
     await get().refreshMessages();
   },
   delAndRegenerateMessage: async (id) => {
@@ -246,17 +281,11 @@ export const chatMessage: StateCreator<
     get().internal_traceMessage(id, { eventType: TraceEventType.CopyMessage });
   },
   toggleMessageEditing: (id, editing) => {
-    const messageEditingIds = produce(get().messageEditingIds, (draft) => {
-      if (editing) {
-        draft.push(id);
-      } else {
-        const index = draft.indexOf(id);
-
-        if (index >= 0) draft.splice(index, 1);
-      }
-    });
-
-    set({ messageEditingIds }, false, 'toggleMessageEditing');
+    set(
+      { messageEditingIds: toggleBooleanList(get().messageEditingIds, id, editing) },
+      false,
+      'toggleMessageEditing',
+    );
   },
   stopGenerateMessage: () => {
     const { abortController, internal_toggleChatLoading } = get();
@@ -492,11 +521,28 @@ export const chatMessage: StateCreator<
       window.addEventListener('beforeunload', preventLeavingFn);
 
       const abortController = new AbortController();
-      set({ abortController, chatLoadingId: id }, false, action);
+      set(
+        {
+          abortController,
+          chatLoadingIds: toggleBooleanList(get().messageLoadingIds, id!, loading),
+        },
+        false,
+        action,
+      );
 
       return abortController;
     } else {
-      set({ abortController: undefined, chatLoadingId: undefined }, false, action);
+      if (!id) {
+        set({ abortController: undefined, chatLoadingIds: [] }, false, action);
+      } else
+        set(
+          {
+            abortController: undefined,
+            chatLoadingIds: toggleBooleanList(get().messageLoadingIds, id, loading),
+          },
+          false,
+          action,
+        );
 
       window.removeEventListener('beforeunload', preventLeavingFn);
     }
@@ -504,15 +550,7 @@ export const chatMessage: StateCreator<
   internal_toggleMessageLoading: (loading, id) => {
     set(
       {
-        messageLoadingIds: produce(get().messageLoadingIds, (draft) => {
-          if (loading) {
-            draft.push(id);
-          } else {
-            const index = draft.indexOf(id);
-
-            if (index >= 0) draft.splice(index, 1);
-          }
-        }),
+        messageLoadingIds: toggleBooleanList(get().messageLoadingIds, id, loading),
       },
       false,
       'internal_toggleMessageLoading',
