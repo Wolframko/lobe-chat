@@ -16,7 +16,7 @@ import { traceService } from '@/services/trace';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { chatHelpers } from '@/store/chat/helpers';
-import { ChatStore, useChatStore } from '@/store/chat/store';
+import { ChatStore } from '@/store/chat/store';
 import { ChatMessage, MessageToolCall } from '@/types/message';
 import { TraceEventPayloads } from '@/types/trace';
 import { setNamespace } from '@/utils/storeDebug';
@@ -170,9 +170,7 @@ export const chatMessage: StateCreator<
     if (message.tool_calls) {
       const pools = message.tool_calls
         .flatMap((tool) => {
-          const messages = useChatStore
-            .getState()
-            .messages.filter((m) => m.tool_call_id === tool.id);
+          const messages = get().messages.filter((m) => m.tool_call_id === tool.id);
 
           return messages.map((m) => m.id);
         })
